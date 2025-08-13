@@ -1,0 +1,7 @@
+flask
+flask-cors
+gunicorn
+requests
+redis
+psycopg[binary]
+geopy
