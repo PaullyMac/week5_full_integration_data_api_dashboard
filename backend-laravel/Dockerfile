@@ -20,7 +20,7 @@ WORKDIR /var/www/html
 COPY . .
 
 # Install PHP deps (prod flags)
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-scripts
 
 # Ensure Laravel can write caches/logs
 RUN mkdir -p storage/framework/{cache,sessions,views} storage/logs \
