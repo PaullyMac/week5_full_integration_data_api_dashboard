@@ -9,11 +9,17 @@ class Kernel extends ConsoleKernel
 {
     protected function schedule(Schedule $schedule): void
     {
-        $schedule->command("positions:poll")->everyMinute();
+        // Run every minute; don’t overlap; safe on multi-replica (if any)
+        $schedule->command('positions:poll')
+            ->everyMinute()
+            ->withoutOverlapping()
+            ->onOneServer()
+            ->runInBackground();
     }
 
     protected function commands(): void
     {
-        $this->load(__DIR__."/Commands");
+        $this->load(__DIR__.'/Commands');
+        require base_path('routes/console.php');
     }
 }
