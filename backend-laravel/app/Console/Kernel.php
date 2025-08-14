@@ -9,10 +9,7 @@ class Kernel extends ConsoleKernel
 {
     protected function schedule(Schedule $schedule): void
     {
-        // Run every minute; don’t overlap; safe on multi-replica (if any)
-        $schedule->command('positions:poll')
-            ->everyMinute()
-            ->evenInMaintenanceMode();
+     // intentionally empty - schedule is defined in bootstrap/app.php via withSchedule()
     }
 
     protected function commands(): void

@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Console\Scheduling\Schedule;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -21,6 +22,17 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->group('api', [
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ]);
+    })
+
+    // ✅ Register the schedule here
+    ->withSchedule(function (Schedule $schedule) {
+        $schedule->command('positions:poll')
+            ->everyMinute()
+            ->evenInMaintenanceMode();
+            // Re-enable after we add Redis:
+            // ->withoutOverlapping()
+            // ->onOneServer()
+            // ->runInBackground()
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
