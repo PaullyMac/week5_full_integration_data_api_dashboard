@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PositionController;
 use App\Http\Controllers\Api\IntegrationsController;
 
-Route::get('/health', fn () => response()->json(['ok' => true]));
+Route::get('/health', [IntegrationsController::class, 'health']);
 
 Route::prefix('traccar')->group(function () {
     Route::get('devices',   [IntegrationsController::class, 'traccarDevices']);

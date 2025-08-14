@@ -27,8 +27,11 @@ class Integrations
 
     public function predictEta(array $payload): array
     {
-        $res = Http::timeout(15)->post("{$this->flaskBase}/api/predict_eta", $payload);
-        return Http::timeout(15)->asJson()->post("{$this->flaskBase}/api/predict_eta", $payload)->throw()->json();
+        return Http::timeout(15)
+            ->asJson()
+            ->post("{$this->flaskBase}/api/predict_eta", $payload)
+            ->throw()
+            ->json();
     }
 
     public function traccarDevices(): array
