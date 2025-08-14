@@ -7,16 +7,15 @@ return [
     'max_age' => 0,
     'supports_credentials' => false,
 
-    // exact origins (dev + stable prod)
+    // Stable known origins
     'allowed_origins' => [
         'http://localhost:3000',
         'http://127.0.0.1:3000',
-        // your stable Vercel domain for this project (not the changing previews):
-        'https://week5-full-integration-data-api-dashboard.vercel.app',
+        'https://week5-full-integration-data-api-dashboard.vercel.app', // stable prod domain
     ],
 
-    // ✅ allow ALL Vercel preview URLs for this project (note the /…/ regex)
+    // ✅ Allow ALL Vercel preview URLs for THIS project
     'allowed_origins_patterns' => [
-        '/^https:\/\/week5-full-integration-data-api-dashboard-[a-z0-9]+\.vercel\.app$/',
+        '#^https://week5-full-integration-data-api-dashboard-[a-z0-9]+\.vercel\.app$#',
     ],
 ];

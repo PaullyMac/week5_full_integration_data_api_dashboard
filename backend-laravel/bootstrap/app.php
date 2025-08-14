@@ -12,10 +12,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Register Laravel's built-in CORS middleware once
-        $middleware->append(\Illuminate\Http\Middleware\HandleCors::class);
+        // ✅ Register Laravel's built-in CORS as GLOBAL middleware
+        $middleware->use([
+            \Illuminate\Http\Middleware\HandleCors::class,
+        ]);
 
-        // Typical API group middleware
+        // API group (bindings)
         $middleware->group('api', [
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ]);
