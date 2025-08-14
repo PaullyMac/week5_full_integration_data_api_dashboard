@@ -12,9 +12,7 @@ class Kernel extends ConsoleKernel
         // Run every minute; don’t overlap; safe on multi-replica (if any)
         $schedule->command('positions:poll')
             ->everyMinute()
-            ->withoutOverlapping()
-            ->onOneServer()
-            ->runInBackground();
+            ->evenInMaintenanceMode();
     }
 
     protected function commands(): void
