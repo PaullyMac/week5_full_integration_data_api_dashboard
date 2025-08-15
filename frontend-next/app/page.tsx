@@ -22,7 +22,16 @@ const LeafletMap = dynamic(
 export default function Page() {
   const { data: health }    = useSWR('/api/health', fetcher, { refreshInterval: 12000 });
   const { data: devices }   = useSWR('/api/traccar/devices', fetcher, { refreshInterval: 15000 });
-  const { data: positions } = useSWR('/api/traccar/positions', fetcher, { refreshInterval: 15000 });
+  const { data: positionsRaw } = useSWR('/api/positions/latest', fetcher, { refreshInterval: 10000 });
+
+  const positions = Array.isArray(positionsRaw)
+    ? positionsRaw.map((p: any) => ({
+        latitude: p.latitude,
+        longitude: p.longitude,
+        deviceId: p.device_id,
+        serverTime: p.fix_time ?? p.server_time ?? null,
+      }))
+    : [];
 
   const [form, setForm] = React.useState({
     current_lat: 14.5535, current_lng: 121.0447,
@@ -83,7 +92,7 @@ export default function Page() {
 
       <section style={{marginTop:16}}>
         <Card title="Live Positions">
-          <LeafletMap positions={Array.isArray(positions) ? positions : []} />
+          <LeafletMap positions={positions} />
         </Card>
       </section>
     </main>
