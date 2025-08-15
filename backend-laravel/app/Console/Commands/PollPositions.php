@@ -18,6 +18,10 @@ class PollPositions extends Command
 
     protected $description = 'Fetch positions (Flask cache preferred, fallback to Traccar) and persist to Postgres';
 
+    private function j($v) {
+        return is_null($v) ? null : json_encode($v, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    }
+
     public function handle(): int
     {
         $started = microtime(true);
@@ -119,7 +123,7 @@ class PollPositions extends Command
 
             $fix = isset($p['fixTime']) ? Carbon::parse($p['fixTime']) : null;
             $srv = isset($p['serverTime']) ? Carbon::parse($p['serverTime']) : null;
-
+            
             $row = [
                 'traccar_id' => $traccarId,
                 'device_id'  => $deviceId,
@@ -132,7 +136,7 @@ class PollPositions extends Command
                 'course'     => isset($p['course'])    ? (int)$p['course']      : null,
                 'valid'      => (bool)($p['valid'] ?? true),
                 'address'    => $p['address'] ?? null,
-                'attributes' => $p['attributes'] ?? null,
+                'attributes' => $this->j($p['attributes'] ?? null),
                 'updated_at' => $now,
                 'created_at' => $now,
             ];
@@ -152,7 +156,7 @@ class PollPositions extends Command
                     'course'          => $row['course'],
                     'valid'           => $row['valid'],
                     'address'         => $row['address'],
-                    'attributes'      => $row['attributes'],
+                    'attributes'      => $this->j($p['attributes'] ?? null),
                     'updated_at'      => $now,
                     'created_at'      => $now,
                 ];
