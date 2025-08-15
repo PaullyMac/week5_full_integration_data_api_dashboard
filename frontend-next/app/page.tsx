@@ -91,14 +91,28 @@ export default function Page() {
     e.preventDefault();
     setLoadingEta(true);
     try {
-      const r = await fetch(`${API}/api/predict-eta`, {
+      const r = await fetch(`/api/proxy/api/predict-eta`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(form),
       });
-      setEta(await r.json());
-    } finally { setLoadingEta(false); }
+
+      const text = await r.text(); // read once
+      let data: any = null;
+      try { data = text ? JSON.parse(text) : null; } catch { /* not JSON */ }
+
+      if (!r.ok) {
+        setEta({ error: data?.error || data?.message || text || `HTTP ${r.status}` });
+        return;
+      }
+      setEta(data);
+    } catch (err: any) {
+      setEta({ error: String(err?.message || err) });
+    } finally {
+      setLoadingEta(false);
+    }
   }
+
 
   return (
     <main style={{padding:'20px', maxWidth: 1100, margin:'0 auto', fontFamily:'system-ui,Segoe UI,Roboto,Arial'}}>
