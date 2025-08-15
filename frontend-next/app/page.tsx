@@ -5,7 +5,7 @@ import useSWR from 'swr';
 import dynamic from 'next/dynamic';
 
 // Read from your Railway API
-const API = process.env.NEXT_PUBLIC_API_BASE ?? '';
+const API = '/api/proxy';
 
 const fetcher = (path: string) =>
   fetch(`${API}${path}`).then(async r => {

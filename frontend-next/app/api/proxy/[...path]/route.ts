@@ -1,64 +1,84 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Prefer a server-only env var; fall back to NEXT_PUBLIC_* if set.
 const UPSTREAM =
-  process.env.NEXT_PUBLIC_API_BASE ||
   process.env.API_BASE ||
-  ''; // e.g. https://week5fullintegrationdataapidashboard-production.up.railway.app
+  process.env.NEXT_PUBLIC_API_BASE ||
+  '';
 
-function upstreamUrl(req: NextRequest) {
-  const path = req.nextUrl.pathname.replace(/^\/api\/proxy/, '');
-  const search = req.nextUrl.search || '';
-  if (!UPSTREAM) throw new Error('Missing NEXT_PUBLIC_API_BASE / API_BASE');
-  return new URL(path + search, UPSTREAM).toString();
+if (!UPSTREAM) {
+  // Throwing at module init surfaces clearly in builds
+  throw new Error('Missing API_BASE (or NEXT_PUBLIC_API_BASE) for proxy upstream');
 }
 
-function pickHeaders(req: NextRequest) {
+// No static optimization / caching
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+function toUpstreamUrl(req: NextRequest) {
+  // Strip /api/proxy prefix
+  const path = req.nextUrl.pathname.replace(/^\/api\/proxy/, '');
+  const search = req.nextUrl.search || '';
+  // Ensure UPSTREAM has a scheme
+  const base = UPSTREAM.startsWith('http') ? UPSTREAM : `https://${UPSTREAM}`;
+  return new URL(path + search, base).toString();
+}
+
+function forwardableHeaders(req: NextRequest) {
+  // Keep it minimal & safe. Add others if you need them later.
+  const allow = new Set(['accept', 'content-type', 'authorization']);
   const h = new Headers();
-  const allow = new Set(['content-type', 'authorization']);
   req.headers.forEach((v, k) => {
     if (allow.has(k.toLowerCase())) h.set(k, v);
   });
   return h;
 }
 
-async function passThrough(
-  req: NextRequest,
-  method: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS'
-) {
-  const url = upstreamUrl(req);
-  const init: RequestInit = { method, headers: pickHeaders(req), redirect: 'manual' };
+async function handle(req: NextRequest, method:
+  'GET'|'HEAD'|'POST'|'PUT'|'PATCH'|'DELETE'|'OPTIONS') {
 
-  const hasBody = !['GET', 'HEAD', 'OPTIONS'].includes(method);
-  if (hasBody) {
-    const contentType = req.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      init.body = await req.text(); // keep raw JSON
-    } else if (
-      contentType.includes('application/x-www-form-urlencoded') ||
-      contentType.includes('multipart/form-data')
-    ) {
-      init.body = await req.blob(); // generic pass-through
-    } else {
-      init.body = await req.arrayBuffer();
-    }
+  // Same-origin proxy: short-circuit preflight locally
+  if (method === 'OPTIONS') {
+    return new NextResponse(null, {
+      status: 204,
+      headers: {
+        'access-control-allow-origin': '*',
+        'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD',
+        'access-control-allow-headers': req.headers.get('access-control-request-headers') || '*',
+        'access-control-max-age': '600',
+      },
+    });
   }
+
+  const url = toUpstreamUrl(req);
+
+  const init: RequestInit = {
+    method,
+    headers: forwardableHeaders(req),
+    redirect: 'manual',
+    // For GET/HEAD, no body. For others, prefer streaming body if available.
+    body: (method === 'GET' || method === 'HEAD') ? undefined : (req.body ?? await req.arrayBuffer()),
+  };
 
   const upstream = await fetch(url, init);
-  const resHeaders = new Headers();
-  for (const k of ['content-type', 'cache-control']) {
-    const v = upstream.headers.get(k);
-    if (v) resHeaders.set(k, v);
-  }
-  if (!resHeaders.has('cache-control')) resHeaders.set('cache-control', 'no-store');
 
-  const body = await upstream.arrayBuffer();
-  return new NextResponse(body, { status: upstream.status, headers: resHeaders });
+  // Copy a small, safe subset of headers back
+  const resHeaders = new Headers();
+  const ct = upstream.headers.get('content-type');
+  const cc = upstream.headers.get('cache-control');
+  if (ct) resHeaders.set('content-type', ct);
+  resHeaders.set('cache-control', cc || 'no-store');
+
+  return new NextResponse(upstream.body, {
+    status: upstream.status,
+    headers: resHeaders,
+  });
 }
 
-export async function GET(req: NextRequest)     { return passThrough(req, 'GET'); }
-export async function HEAD(req: NextRequest)    { return passThrough(req, 'HEAD'); }
-export async function POST(req: NextRequest)    { return passThrough(req, 'POST'); }
-export async function PUT(req: NextRequest)     { return passThrough(req, 'PUT'); }
-export async function PATCH(req: NextRequest)   { return passThrough(req, 'PATCH'); }
-export async function DELETE(req: NextRequest)  { return passThrough(req, 'DELETE'); }
-export async function OPTIONS(req: NextRequest) { return passThrough(req, 'OPTIONS'); }
+export const GET     = (req: NextRequest) => handle(req, 'GET');
+export const HEAD    = (req: NextRequest) => handle(req, 'HEAD');
+export const POST    = (req: NextRequest) => handle(req, 'POST');
+export const PUT     = (req: NextRequest) => handle(req, 'PUT');
+export const PATCH   = (req: NextRequest) => handle(req, 'PATCH');
+export const DELETE  = (req: NextRequest) => handle(req, 'DELETE');
+export const OPTIONS = (req: NextRequest) => handle(req, 'OPTIONS');
