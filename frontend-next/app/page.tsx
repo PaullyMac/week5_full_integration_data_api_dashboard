@@ -13,33 +13,80 @@ const fetcher = (path: string) =>
     return r.json();
   });
 
-// Type the dynamically-imported component's props to silence TS
 const LeafletMap = dynamic(
   () => import('./parts/LeafletMap'),
   { ssr: false }
-) as React.ComponentType<{ positions: any[] }>;
+) as React.ComponentType<{ positions: any[]; showPath?: boolean }>;
+
+function timeAgo(d: Date) {
+  const s = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (s < 45) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} h ago`;
+  const d2 = Math.floor(h / 24);
+  return `${d2} d ago`;
+}
+function useRerenderEvery(ms: number) {
+  const [, set] = React.useState(0);
+  React.useEffect(() => { const id = setInterval(() => set(x => x + 1), ms); return () => clearInterval(id); }, [ms]);
+}
 
 export default function Page() {
-  const { data: health }    = useSWR('/api/health', fetcher, { refreshInterval: 12000 });
-  const { data: devices }   = useSWR('/api/traccar/devices', fetcher, { refreshInterval: 15000 });
-  const { data: positionsRaw } = useSWR('/api/positions/latest', fetcher, { refreshInterval: 10000 });
+  const { data: health }       = useSWR('/api/health', fetcher, { refreshInterval: 12000, revalidateOnFocus: false });
+  const { data: devicesRaw }   = useSWR('/api/traccar/devices', fetcher, { refreshInterval: 15000, revalidateOnFocus: false });
+  const devices: Array<{ id:number; name?:string }> = Array.isArray(devicesRaw) ? devicesRaw : [];
 
-  const positions = Array.isArray(positionsRaw)
-    ? positionsRaw.map((p: any) => ({
-        latitude: p.latitude,
+  // Pick a device (defaults to the first one once devices load)
+  const [deviceId, setDeviceId] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    if (!deviceId && devices.length) setDeviceId(devices[0].id);
+  }, [devices, deviceId]);
+
+  // Track positions for the selected device (from Laravel -> Traccar)
+  const { data: trackRaw } = useSWR(
+    deviceId ? `/api/traccar/positions?deviceId=${deviceId}` : null,
+    fetcher,
+    { refreshInterval: 10000, revalidateOnFocus: false }
+  );
+
+  const track = Array.isArray(trackRaw)
+    ? trackRaw.map((p: any) => ({
+        latitude:  p.latitude,
         longitude: p.longitude,
-        deviceId: p.device_id,
-        serverTime: p.fix_time ?? p.server_time ?? null,
+        deviceId:  p.deviceId,
+        serverTime: p.fixTime ?? p.serverTime ?? null,
+        speed:     p.speed ?? null,
       }))
     : [];
 
+  // Also keep your DB "latest" list to fall back if ever needed
+  const { data: latestRaw } = useSWR('/api/positions/latest', fetcher, { refreshInterval: 10000, revalidateOnFocus: false });
+  const latest = Array.isArray(latestRaw)
+    ? latestRaw.map((p:any)=>({ latitude:p.latitude, longitude:p.longitude, serverTime:p.fix_time ?? p.server_time ?? null }))
+    : [];
+
+  // What we’ll render on the map: prefer live track if we have it, else DB latest
+  const positions = track.length ? track : latest;
+
+  // Freshness line based on newest timestamp from what we’re showing
+  useRerenderEvery(30_000);
+  const newestISO = React.useMemo(() => {
+    const ts = positions
+      .map(p => (p.serverTime ? new Date(p.serverTime).getTime() : NaN))
+      .filter(n => Number.isFinite(n));
+    return ts.length ? new Date(Math.max(...ts)).toISOString() : null;
+  }, [positions]);
+  const lastUpdatedLabel = newestISO ? timeAgo(new Date(newestISO)) : '—';
+
+  // ---- Quick ETA (unchanged) ----
   const [form, setForm] = React.useState({
     current_lat: 14.5535, current_lng: 121.0447,
     dropoff_lat: 14.5353, dropoff_lng: 120.9830
   });
   const [eta, setEta] = React.useState<any>(null);
   const [loadingEta, setLoadingEta] = React.useState(false);
-
   async function submitETA(e: React.FormEvent) {
     e.preventDefault();
     setLoadingEta(true);
@@ -49,11 +96,8 @@ export default function Page() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(form),
       });
-      const j = await r.json();
-      setEta(j);
-    } finally {
-      setLoadingEta(false);
-    }
+      setEta(await r.json());
+    } finally { setLoadingEta(false); }
   }
 
   return (
@@ -92,7 +136,27 @@ export default function Page() {
 
       <section style={{marginTop:16}}>
         <Card title="Live Positions">
-          <LeafletMap positions={positions} />
+          {/* Device picker + freshness */}
+          <div style={{display:'flex', gap:12, alignItems:'center', marginBottom:8, flexWrap:'wrap'}}>
+            <label style={{fontSize:14}}>
+              Device:&nbsp;
+              <select
+                value={deviceId ?? ''}
+                onChange={e => setDeviceId(e.target.value ? Number(e.target.value) : null)}
+                style={{padding:'6px 8px', border:'1px solid #ddd', borderRadius:8, minWidth:160}}
+              >
+                {!devices.length && <option value="">(none)</option>}
+                {devices.map(d => <option key={d.id} value={d.id}>{d.name ?? `Device ${d.id}`}</option>)}
+              </select>
+            </label>
+
+            <small style={{color:'#666'}}>
+              Last update: <b title={newestISO ?? ''}>{lastUpdatedLabel}</b>
+            </small>
+            <small style={{color:'#999'}}>{track.length ? 'source: Traccar (live)' : 'source: DB latest'}</small>
+          </div>
+
+          <LeafletMap positions={positions} showPath={!!track.length} />
         </Card>
       </section>
     </main>

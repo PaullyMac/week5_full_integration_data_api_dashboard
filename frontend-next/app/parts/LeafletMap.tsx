@@ -1,6 +1,7 @@
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { useEffect } from 'react';
 import type { LatLngExpression } from 'leaflet';
 import L from 'leaflet';
 
@@ -12,6 +13,21 @@ const icon = new L.Icon({
 
 export type Position = { latitude: number; longitude: number; deviceId?: number; serverTime?: string };
 
+function FitBounds({ positions }: { positions: Position[] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!positions?.length) return;
+    const points = positions.map(p => [p.latitude, p.longitude]) as [number, number][];
+    // if single point, setView; if many, fitBounds
+    if (points.length === 1) {
+      map.setView(points[0], 14, { animate: false });
+    } else {
+      map.fitBounds(points, { padding: [40, 40] });
+    }
+  }, [positions, map]);
+  return null;
+}
+
 export default function LeafletMap({ positions }: { positions: Position[] }) {
   const center: [number, number] = positions && positions.length
     ? [positions[0].latitude, positions[0].longitude]
@@ -21,6 +37,7 @@ export default function LeafletMap({ positions }: { positions: Position[] }) {
     <MapContainer center={center as LatLngExpression} zoom={12} style={{height:400, borderRadius:12}}>
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; OpenStreetMap contributors' />
+      <FitBounds positions={positions} />
       {positions?.map((p, i) => (
         <Marker key={i} position={[p.latitude, p.longitude] as LatLngExpression} icon={icon}>
           <Popup>
