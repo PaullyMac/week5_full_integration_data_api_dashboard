@@ -61,16 +61,16 @@ export default function Page() {
       }))
     : [];
 
-  // Also keep your DB "latest" list to fall back if ever needed
+
   const { data: latestRaw } = useSWR('/api/positions/latest', fetcher, { refreshInterval: 10000, revalidateOnFocus: false });
   const latest = Array.isArray(latestRaw)
     ? latestRaw.map((p:any)=>({ latitude:p.latitude, longitude:p.longitude, serverTime:p.fix_time ?? p.server_time ?? null }))
     : [];
 
-  // What we’ll render on the map: prefer live track if we have it, else DB latest
+
   const positions = track.length ? track : latest;
 
-  // Freshness line based on newest timestamp from what we’re showing
+
   useRerenderEvery(30_000);
   const newestISO = React.useMemo(() => {
     const ts = positions
@@ -80,7 +80,7 @@ export default function Page() {
   }, [positions]);
   const lastUpdatedLabel = newestISO ? timeAgo(new Date(newestISO)) : '—';
 
-  // ---- Quick ETA (unchanged) ----
+  // ---- Quick ETA ----
   const [form, setForm] = React.useState({
     current_lat: 14.5535, current_lng: 121.0447,
     dropoff_lat: 14.5353, dropoff_lng: 120.9830
@@ -136,7 +136,7 @@ export default function Page() {
 
       <section style={{marginTop:16}}>
         <Card title="Live Positions">
-          {/* Device picker + freshness */}
+
           <div style={{display:'flex', gap:12, alignItems:'center', marginBottom:8, flexWrap:'wrap'}}>
             <label style={{fontSize:14}}>
               Device:&nbsp;
